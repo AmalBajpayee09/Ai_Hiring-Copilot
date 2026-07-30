@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.ai.ai_engine import AIEngine
+from app.ai.evaluation import EvaluationService
 from app.database.database import SessionLocal
 from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.evaluation_repository import EvaluationRepository
@@ -57,9 +57,9 @@ def evaluate_candidate(
             )
 
         # AI Evaluation
-        ai = AIEngine()
+        evaluation_service = EvaluationService()
 
-        evaluation = ai.evaluate_candidate(
+        evaluation = evaluation_service.evaluate_candidate(
             candidate,
             job_description,
         )

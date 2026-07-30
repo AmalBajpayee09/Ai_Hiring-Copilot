@@ -2,12 +2,11 @@ from fastapi import FastAPI
 
 from app.api.v1.resume import router as resume_router
 from app.api.v1.candidates import router as candidate_router
-from app.api.v1.evaluation import (
-    router as evaluation_router,
-)
-from app.api.v1.jobs import (
-    router as job_router,
-)
+from app.api.v1.jobs import router as job_router
+from app.api.v1.evaluation import router as evaluation_router
+from app.api.v1.interview import router as interview_router
+print("MAIN.PY LOADED")
+
 app = FastAPI(
     title="AI Hiring Copilot API",
     description="LLM Powered Intelligent Recruitment Platform",
@@ -16,8 +15,10 @@ app = FastAPI(
 
 app.include_router(resume_router)
 app.include_router(candidate_router)
-app.include_router(evaluation_router)
 app.include_router(job_router)
+app.include_router(evaluation_router)
+app.include_router(interview_router)
+
 
 @app.get("/")
 def root():

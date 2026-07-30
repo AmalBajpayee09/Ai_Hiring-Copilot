@@ -6,7 +6,10 @@ from app.schemas.evaluation_schema import CandidateEvaluation
 
 class EvaluationRepository:
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+    ):
         self.db = db
 
     def create_evaluation(
@@ -33,40 +36,28 @@ class EvaluationRepository:
         self.db.refresh(db_evaluation)
 
         return db_evaluation
-    
-def get_job_description(
-    self,
-    job_id: int,
-) -> str | None:
 
-    job = self.get_job_by_id(job_id)
+    def get_all_evaluations(
+        self,
+    ):
+        return self.db.query(Evaluation).all()
 
-    if job is None:
-        return None
+    def get_evaluation_by_id(
+        self,
+        evaluation_id: int,
+    ):
+        return (
+            self.db.query(Evaluation)
+            .filter(Evaluation.id == evaluation_id)
+            .first()
+        )
 
-    return job.description    
-
-def get_all_evaluations(self):
-    return self.db.query(Evaluation).all()
-
-
-def get_evaluation_by_id(
-    self,
-    evaluation_id: int,
-):
-    return (
-        self.db.query(Evaluation)
-        .filter(Evaluation.id == evaluation_id)
-        .first()
-    )
-
-
-def get_candidate_evaluations(
-    self,
-    candidate_id: int,
-):
-    return (
-        self.db.query(Evaluation)
-        .filter(Evaluation.candidate_id == candidate_id)
-        .all()
-    )
+    def get_candidate_evaluations(
+        self,
+        candidate_id: int,
+    ):
+        return (
+            self.db.query(Evaluation)
+            .filter(Evaluation.candidate_id == candidate_id)
+            .all()
+        )
