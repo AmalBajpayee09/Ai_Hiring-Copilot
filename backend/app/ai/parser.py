@@ -1,25 +1,31 @@
 import json
 import re
 
+from json_repair import repair_json
+
 
 class AIParser:
 
     @staticmethod
-    def extract_json(
-        text: str,
-    ):
+    def extract_json(text: str):
 
         match = re.search(
-            r"\{.*\}",
+            r"\{[\s\S]*\}",
             text,
-            re.DOTALL,
         )
 
         if not match:
             raise ValueError(
-                "No JSON found in AI response."
+                "No JSON object found in AI response."
             )
 
-        return json.loads(
-            match.group()
-        )
+        raw_json = match.group()
+
+        try:
+            return json.loads(raw_json)
+
+        except Exception:
+
+            repaired = repair_json(raw_json)
+
+            return json.loads(repaired)

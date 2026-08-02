@@ -14,7 +14,8 @@ from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.job import Job
 from app.models.interview import Interview
-
+from app.models.skill_gap import SkillGap
+from app.models.resume_summary import ResumeSummary
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

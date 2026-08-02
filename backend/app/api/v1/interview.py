@@ -1,13 +1,31 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+
+from sqlalchemy.orm import Session
+
+from app.database.database import get_db
 
 from app.ai.interview import InterviewService
-from app.database.database import SessionLocal
 
-from app.repositories.candidate_repository import CandidateRepository
-from app.repositories.job_repository import JobRepository
-from app.repositories.interview_repository import InterviewRepository
+from app.cache.cache_service import CacheService
 
-from app.schemas.interview_request import InterviewRequest
+from app.repositories.candidate_repository import (
+    CandidateRepository,
+)
+
+from app.repositories.job_repository import (
+    JobRepository,
+)
+
+from app.repositories.interview_repository import (
+    InterviewRepository,
+)
+
+from app.schemas.interview_request import (
+    InterviewRequest,
+)
+
 from app.schemas.interview_response import (
     InterviewResponse,
     InterviewResult,
@@ -24,81 +42,117 @@ router = APIRouter(
     response_model=InterviewResponse,
 )
 def generate_interview(
+
     request: InterviewRequest,
+
+    db: Session = Depends(get_db),
+
 ):
 
-    db = SessionLocal()
+    candidate_repo = CandidateRepository(db)
 
-    try:
+    job_repo = JobRepository(db)
 
-        # Candidate
-        candidate_repository = CandidateRepository(db)
+    interview_repo = InterviewRepository(db)
 
-        candidate = candidate_repository.get_candidate_profile(
-            request.candidate_id
-        )
+    interview_service = InterviewService()
 
-        if candidate is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Candidate not found.",
-            )
+    cache = CacheService()
 
-        # Job
-        job_repository = JobRepository(db)
+    cache_key = (
+        f"interview:{request.candidate_id}:{request.job_id}"
+    )
 
-        job_description = job_repository.get_job_description(
-            request.job_id
-        )
+    cached = cache.get(cache_key)
 
-        if job_description is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Job not found.",
-            )
+    if cached:
 
-        # AI Interview
-        interview_service = InterviewService()
-
-        interview: InterviewResult = (
-            interview_service.generate_interview(
-                candidate=candidate,
-                job_description=job_description,
-            )
-        )
-
-        # Save
-        interview_repository = InterviewRepository(db)
-
-        interview_repository.create_interview(
-            candidate_id=request.candidate_id,
-            job_id=request.job_id,
-            technical_questions=[
-                q.model_dump()
-                for q in interview.technical_questions
-            ],
-            hr_questions=[
-                q.model_dump()
-                for q in interview.hr_questions
-            ],
-        )
+        print("=" * 80)
+        print("✅ Interview Cache Hit")
 
         return InterviewResponse(
+
             success=True,
+
             candidate_id=request.candidate_id,
+
             job_id=request.job_id,
-            technical_questions=interview.technical_questions,
-            hr_questions=interview.hr_questions,
+
+            technical_questions=cached["technical_questions"],
+
+            hr_questions=cached["hr_questions"],
+
         )
 
-    except HTTPException:
-        raise
+    print("=" * 80)
+    print("❌ Interview Cache Miss")
 
-    except Exception as e:
+    candidate = candidate_repo.get_candidate_profile(
+        request.candidate_id
+    )
+
+    if candidate is None:
+
         raise HTTPException(
-            status_code=500,
-            detail=str(e),
+            status_code=404,
+            detail="Candidate not found.",
         )
 
-    finally:
-        db.close()
+    job_description = job_repo.get_job_description(
+        request.job_id
+    )
+
+    if job_description is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found.",
+        )
+
+    interview: InterviewResult = (
+        interview_service.generate_interview(
+            candidate=candidate,
+            job_description=job_description,
+        )
+    )
+
+    cache.set(
+
+        cache_key,
+
+        interview.model_dump(),
+
+        ttl=3600,
+
+    )
+
+    interview_repo.create_interview(
+
+        candidate_id=request.candidate_id,
+
+        job_id=request.job_id,
+
+        technical_questions=[
+            q.model_dump()
+            for q in interview.technical_questions
+        ],
+
+        hr_questions=[
+            q.model_dump()
+            for q in interview.hr_questions
+        ],
+    )
+
+    return InterviewResponse(
+
+        success=True,
+
+        candidate_id=request.candidate_id,
+
+        job_id=request.job_id,
+
+        technical_questions=interview.technical_questions,
+
+        hr_questions=interview.hr_questions,
+
+    )

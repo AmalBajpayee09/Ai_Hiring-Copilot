@@ -1,17 +1,49 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
 
-from app.ai.evaluation import EvaluationService
-from app.database.database import SessionLocal
-from app.repositories.candidate_repository import CandidateRepository
-from app.repositories.evaluation_repository import EvaluationRepository
-from app.repositories.job_repository import JobRepository
-from app.schemas.evaluation_history import EvaluationHistory
-from app.schemas.evaluation_request import EvaluationRequest
-from app.schemas.evaluation_response import EvaluationResponse
+from sqlalchemy.orm import Session
+
+from app.database.database import get_db
+
+from app.repositories.candidate_repository import (
+    CandidateRepository,
+)
+
+from app.repositories.job_repository import (
+    JobRepository,
+)
+
+from app.repositories.evaluation_repository import (
+    EvaluationRepository,
+)
+
+from app.ai.evaluation import (
+    EvaluationService,
+)
+
+from app.cache.cache_service import (
+    CacheService,
+)
+
+from app.schemas.evaluation_request import (
+    EvaluationRequest,
+)
+
+from app.schemas.evaluation_response import (
+    EvaluationResponse,
+)
+
+from app.schemas.evaluation_history import (
+    EvaluationHistory,
+)
 
 router = APIRouter(
+
     prefix="/api/v1/evaluation",
+
     tags=["Evaluation"],
+
 )
 
 
@@ -20,93 +52,127 @@ router = APIRouter(
     response_model=EvaluationResponse,
 )
 def evaluate_candidate(
+
     request: EvaluationRequest,
+
+    db: Session = Depends(get_db),
+
 ):
-    """
-    Evaluate a candidate against a saved Job Description
-    and store the evaluation in the database.
-    """
 
-    db = SessionLocal()
+    candidate_repo = CandidateRepository(db)
 
-    try:
-        # Candidate Repository
-        candidate_repository = CandidateRepository(db)
+    job_repo = JobRepository(db)
 
-        candidate = candidate_repository.get_candidate_profile(
-            request.candidate_id
-        )
+    evaluation_repo = EvaluationRepository(db)
 
-        if candidate is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Candidate not found.",
-            )
+    evaluation_service = EvaluationService()
 
-        # Job Repository
-        job_repository = JobRepository(db)
+    cache = CacheService()
 
-        job_description = job_repository.get_job_description(
-            request.job_id
-        )
+    cache_key = (
+        f"evaluation:{request.candidate_id}:{request.job_id}"
+    )
 
-        if job_description is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Job not found.",
-            )
+    cached = cache.get(cache_key)
 
-        # AI Evaluation
-        evaluation_service = EvaluationService()
+    if cached:
 
-        evaluation = evaluation_service.evaluate_candidate(
-            candidate,
-            job_description,
-        )
-
-        # Save Evaluation
-        evaluation_repository = EvaluationRepository(db)
-
-        evaluation_repository.create_evaluation(
-            candidate_id=request.candidate_id,
-            job_description=job_description,
-            evaluation=evaluation,
-        )
+        print("=" * 80)
+        print("✅ Evaluation Cache Hit")
 
         return EvaluationResponse(
+
             success=True,
+
             candidate_id=request.candidate_id,
-            evaluation=evaluation,
+
+            evaluation=cached,
+
         )
 
-    except HTTPException:
-        raise
+    print("=" * 80)
+    print("❌ Evaluation Cache Miss")
 
-    except Exception as e:
+    candidate = candidate_repo.get_candidate_profile(
+        request.candidate_id
+    )
+
+    if candidate is None:
+
         raise HTTPException(
-            status_code=500,
-            detail=str(e),
+
+            status_code=404,
+
+            detail="Candidate not found.",
+
         )
 
-    finally:
-        db.close()
+    job_description = job_repo.get_job_description(
+        request.job_id
+    )
+
+    if job_description is None:
+
+        raise HTTPException(
+
+            status_code=404,
+
+            detail="Job not found.",
+
+        )
+
+    evaluation = evaluation_service.evaluate_candidate(
+
+        candidate,
+
+        job_description,
+
+    )
+
+    cache.set(
+
+        cache_key,
+
+        evaluation.model_dump(),
+
+        ttl=3600,
+
+    )
+
+    evaluation_repo.create_evaluation(
+
+        candidate_id=request.candidate_id,
+
+        job_description=job_description,
+
+        evaluation=evaluation,
+
+    )
+
+    return EvaluationResponse(
+
+        success=True,
+
+        candidate_id=request.candidate_id,
+
+        evaluation=evaluation,
+
+    )
 
 
 @router.get(
     "/",
     response_model=list[EvaluationHistory],
 )
-def get_all_evaluations():
+def get_all_evaluations(
 
-    db = SessionLocal()
+    db: Session = Depends(get_db),
 
-    try:
-        repository = EvaluationRepository(db)
+):
 
-        return repository.get_all_evaluations()
+    repository = EvaluationRepository(db)
 
-    finally:
-        db.close()
+    return repository.get_all_evaluations()
 
 
 @router.get(
@@ -114,28 +180,30 @@ def get_all_evaluations():
     response_model=EvaluationHistory,
 )
 def get_evaluation(
+
     evaluation_id: int,
+
+    db: Session = Depends(get_db),
+
 ):
 
-    db = SessionLocal()
+    repository = EvaluationRepository(db)
 
-    try:
-        repository = EvaluationRepository(db)
+    evaluation = repository.get_evaluation_by_id(
+        evaluation_id
+    )
 
-        evaluation = repository.get_evaluation_by_id(
-            evaluation_id
+    if evaluation is None:
+
+        raise HTTPException(
+
+            status_code=404,
+
+            detail="Evaluation not found.",
+
         )
 
-        if evaluation is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Evaluation not found.",
-            )
-
-        return evaluation
-
-    finally:
-        db.close()
+    return evaluation
 
 
 @router.get(
@@ -143,17 +211,15 @@ def get_evaluation(
     response_model=list[EvaluationHistory],
 )
 def get_candidate_history(
+
     candidate_id: int,
+
+    db: Session = Depends(get_db),
+
 ):
 
-    db = SessionLocal()
+    repository = EvaluationRepository(db)
 
-    try:
-        repository = EvaluationRepository(db)
-
-        return repository.get_candidate_evaluations(
-            candidate_id
-        )
-
-    finally:
-        db.close()
+    return repository.get_candidate_evaluations(
+        candidate_id
+    )
