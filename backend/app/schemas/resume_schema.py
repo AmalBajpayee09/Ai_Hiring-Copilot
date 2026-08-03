@@ -11,4 +11,6 @@ class ResumeUploadResponse(BaseModel):
 
     text_length: int
 
+    candidate_id: int          
+
     candidate: CandidateProfile

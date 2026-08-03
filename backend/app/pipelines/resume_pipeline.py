@@ -35,7 +35,7 @@ class ResumePipeline:
     def process_resume(
         self,
         file_path: str,
-    ) -> tuple[str, CandidateProfile]:
+    ) -> tuple[str, CandidateProfile,int]:
 
         # Extract Resume Text
 
@@ -75,4 +75,4 @@ class ResumePipeline:
 
         )
 
-        return extracted_text, candidate
+        return extracted_text, candidate, db_candidate.id

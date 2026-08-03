@@ -63,7 +63,7 @@ async def upload_resume(
     try:
         pipeline = ResumePipeline(db)
 
-        extracted_text, candidate = pipeline.process_resume(
+        extracted_text, candidate, candidate_id = pipeline.process_resume(
             str(file_path)
         )
 
@@ -82,5 +82,6 @@ async def upload_resume(
         resume_id=Path(unique_filename).stem,
         filename=unique_filename,
         text_length=len(extracted_text),
+        candidate_id=candidate_id,
         candidate=candidate,
     )

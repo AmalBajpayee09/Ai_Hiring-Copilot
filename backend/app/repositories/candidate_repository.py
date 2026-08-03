@@ -22,6 +22,58 @@ class CandidateRepository:
         candidate: CandidateProfile,
     ) -> Candidate:
 
+        # Check if candidate already exists
+        existing_candidate = (
+            self.db.query(Candidate)
+            .filter(Candidate.email == candidate.email)
+            .first()
+        )
+
+        if existing_candidate:
+
+            # Update existing candidate
+            existing_candidate.name = candidate.name
+            existing_candidate.phone = candidate.phone
+            existing_candidate.linkedin = candidate.linkedin
+            existing_candidate.github = candidate.github
+            existing_candidate.portfolio = candidate.portfolio
+            existing_candidate.summary = candidate.summary
+            existing_candidate.skills = candidate.skills
+
+            existing_candidate.education = [
+                item.model_dump()
+                for item in candidate.education
+            ]
+
+            existing_candidate.experience = [
+                item.model_dump()
+                for item in candidate.experience
+            ]
+
+            existing_candidate.projects = [
+                item.model_dump()
+                for item in candidate.projects
+            ]
+
+            existing_candidate.certifications = [
+                item.model_dump()
+                for item in candidate.certifications
+            ]
+
+            try:
+                self.db.commit()
+                self.db.refresh(existing_candidate)
+
+            except Exception:
+                self.db.rollback()
+                raise
+
+            return existing_candidate
+
+        # -------------------------
+        # New Candidate
+        # -------------------------
+
         db_candidate = Candidate(
             name=candidate.name,
             email=candidate.email,
